@@ -1,0 +1,29 @@
+FROM golang:1.23-bookworm AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN GOOS=linux go build -o client_linux ./cmd/client/*.go
+RUN GOOS=windows go build -o client_win ./cmd/client/*.go
+RUN GOOS=darwin go build -o client_mac ./cmd/client/*.go
+
+
+
+FROM debian:bookworm
+
+WORKDIR /app
+
+# Копируем скомпилированные бинарные файлы из стадии сборки в финальный образ
+COPY --from=builder /app/client_linux /app/
+COPY --from=builder /app/client_win   /app/
+COPY --from=builder /app/client_mac   /app/
+
+RUN chmod +x /app/client_linux
+RUN chmod +x /app/client_win
+RUN chmod +x /app/client_mac
+
+CMD ["./client_linux"]
