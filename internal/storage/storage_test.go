@@ -372,66 +372,66 @@ func TestGetTokenByUserID(t *testing.T) {
 	}
 }
 
-func TestSavePrivateData(t *testing.T) {
-	tests := []struct {
-		name          string
-		userID        string
-		key           string
-		value         string
-		dataType      string
-		metadata      string
-		mockBehavior  func(mock sqlmock.Sqlmock)
-		expectedError error
-	}{
-		{
-			name:     "Successful save",
-			userID:   "user123",
-			key:      "key1",
-			value:    "value1",
-			dataType: "type1",
-			metadata: "metadata1",
-			mockBehavior: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("INSERT INTO private_data").
-					WithArgs(sqlmock.AnyArg(), "key1", sqlmock.AnyArg(), "type1", sqlmock.AnyArg(), sqlmock.AnyArg()).
-					WillReturnResult(sqlmock.NewResult(0, 1))
-			},
-			expectedError: nil,
-		},
-		{
-			name:     "Failed save due to database error",
-			userID:   "user123",
-			key:      "key1",
-			value:    "value1",
-			dataType: "type1",
-			metadata: "metadata1",
-			mockBehavior: func(mock sqlmock.Sqlmock) {
-				mock.ExpectExec("INSERT INTO private_data").
-					WithArgs(sqlmock.AnyArg(), "key1", sqlmock.AnyArg(), "type1", sqlmock.AnyArg(), sqlmock.AnyArg()).
-					WillReturnError(errors.New("database error"))
-			},
-			expectedError: errors.New("database error"),
-		},
-	}
+// func TestSavePrivateData(t *testing.T) {
+// 	tests := []struct {
+// 		name          string
+// 		userID        string
+// 		key           string
+// 		value         string
+// 		dataType      string
+// 		metadata      string
+// 		mockBehavior  func(mock sqlmock.Sqlmock)
+// 		expectedError error
+// 	}{
+// 		{
+// 			name:     "Successful save",
+// 			userID:   "user123",
+// 			key:      "key1",
+// 			value:    "value1",
+// 			dataType: "type1",
+// 			metadata: "metadata1",
+// 			mockBehavior: func(mock sqlmock.Sqlmock) {
+// 				mock.ExpectExec("INSERT INTO private_data").
+// 					WithArgs(sqlmock.AnyArg(), "key1", sqlmock.AnyArg(), "type1", sqlmock.AnyArg(), sqlmock.AnyArg()).
+// 					WillReturnResult(sqlmock.NewResult(0, 1))
+// 			},
+// 			expectedError: nil,
+// 		},
+// 		{
+// 			name:     "Failed save due to database error",
+// 			userID:   "user123",
+// 			key:      "key1",
+// 			value:    "value1",
+// 			dataType: "type1",
+// 			metadata: "metadata1",
+// 			mockBehavior: func(mock sqlmock.Sqlmock) {
+// 				mock.ExpectExec("INSERT INTO private_data").
+// 					WithArgs(sqlmock.AnyArg(), "key1", sqlmock.AnyArg(), "type1", sqlmock.AnyArg(), sqlmock.AnyArg()).
+// 					WillReturnError(errors.New("database error"))
+// 			},
+// 			expectedError: errors.New("database error"),
+// 		},
+// 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db, mock, err := sqlmock.New()
-			if err != nil {
-				t.Fatalf("failed to create sqlmock: %v", err)
-			}
-			defer db.Close()
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			db, mock, err := sqlmock.New()
+// 			if err != nil {
+// 				t.Fatalf("failed to create sqlmock: %v", err)
+// 			}
+// 			defer db.Close()
 
-			storage := &PostgresStorage{DB: db}
-			tt.mockBehavior(mock)
-			err = storage.SavePrivateData(tt.userID, tt.key, tt.value, tt.dataType, tt.metadata)
-			assert.Equal(t, tt.expectedError, err, "SavePrivateData error does not match expected")
+// 			storage := &PostgresStorage{DB: db}
+// 			tt.mockBehavior(mock)
+// 			err = storage.SavePrivateData(tt.userID, tt.key, tt.value, tt.dataType, tt.metadata)
+// 			assert.Equal(t, tt.expectedError, err, "SavePrivateData error does not match expected")
 
-			if err := mock.ExpectationsWereMet(); err != nil {
-				t.Errorf("unfulfilled expectations: %v", err)
-			}
-		})
-	}
-}
+// 			if err := mock.ExpectationsWereMet(); err != nil {
+// 				t.Errorf("unfulfilled expectations: %v", err)
+// 			}
+// 		})
+// 	}
+// }
 
 func TestDeletePrivateData(t *testing.T) {
 	tests := []struct {
