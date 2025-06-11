@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"gophkeeper/internal/config"
 	"gophkeeper/internal/handlers"
 	"gophkeeper/internal/logger"
@@ -29,41 +30,202 @@ func setTestClient(serverURL string) {
 }
 
 func TestRegisterUser(t *testing.T) {
-	printUsage()
-	server := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]string
-		err := json.NewDecoder(r.Body).Decode(&body)
-		require.NoError(t, err)
-		assert.Equal(t, "testuser", body["login"])
-		assert.Equal(t, "testpass", body["password"])
+	tests := []struct {
+		name           string
+		login          string
+		password       string
+		serverMock     func(w http.ResponseWriter, r *http.Request)
+		isServerOnline bool
+		expectedOutput string
+	}{
+		{
+			name:           "Successful registration",
+			login:          "testuser",
+			password:       "testpass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]string
+				err := json.NewDecoder(r.Body).Decode(&body)
+				require.NoError(t, err)
+				assert.Equal(t, "testuser", body["login"])
+				assert.Equal(t, "testpass", body["password"])
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"token": "testtoken"})
-	})
-	defer server.Close()
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]string{"token": "testtoken"})
+			},
+			expectedOutput: "Registration successful. Token: testtoken",
+		},
+		{
+			name:           "Server is offline",
+			login:          "offlineuser",
+			password:       "pass",
+			isServerOnline: false,
+			serverMock:     nil,
+			expectedOutput: "Server is offline. Can't register",
+		},
+		{
+			name:           "Network error",
+			login:          "netuser",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock:     nil, // ошибка сети
+			expectedOutput: "Error:",
+		},
+		{
+			name:           "Server returns 500",
+			login:          "err500",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintln(w, "Internal Server Error")
+			},
+			expectedOutput: "Error: Internal Server Error",
+		},
+		{
+			name:           "Invalid server response (not JSON)",
+			login:          "badjson",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintln(w, "This is not a JSON")
+			},
+			expectedOutput: "Error parsing response:",
+		},
+	}
 
-	setTestClient(server.URL)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, w, _ := os.Pipe()
+			stdout := os.Stdout
+			os.Stdout = w
 
-	registerUser("testuser", "testpass")
+			var serverURL string
+			if tt.serverMock != nil && tt.isServerOnline {
+				server := httptest.NewServer(http.HandlerFunc(tt.serverMock))
+				defer server.Close()
+				serverURL = server.URL
+			}
+
+			isServerOnline = tt.isServerOnline
+			client = resty.New().SetBaseURL(serverURL)
+
+			registerUser(tt.login, tt.password)
+
+			os.Stdout = stdout
+			_ = w.Close()
+			out, _ := io.ReadAll(r)
+
+			assert.Contains(t, string(out), tt.expectedOutput)
+		})
+	}
 }
 
 func TestLoginUser(t *testing.T) {
-	server := mockServer(t, func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]string
-		err := json.NewDecoder(r.Body).Decode(&body)
-		require.NoError(t, err)
-		assert.Equal(t, "testuser", body["login"])
-		assert.Equal(t, "testpass", body["password"])
+	_, w, _ := os.Pipe()
+	oldStdout := os.Stdout
+	os.Stdout = w
 
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]string{"token": "testtoken"})
-	})
-	defer server.Close()
+	tests := []struct {
+		name           string
+		login          string
+		password       string
+		isServerOnline bool
+		serverMock     func(w http.ResponseWriter, r *http.Request)
+		expectedToken  string
+		expectedOutput string
+	}{
+		{
+			name:           "Successful login",
+			login:          "testuser",
+			password:       "testpass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]string
+				err := json.NewDecoder(r.Body).Decode(&body)
+				require.NoError(t, err)
+				assert.Equal(t, "testuser", body["login"])
+				assert.Equal(t, "testpass", body["password"])
 
-	setTestClient(server.URL)
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]string{"token": "testtoken"})
+			},
+			expectedToken:  "testtoken",
+			expectedOutput: "Login successful. Token: testtoken",
+		},
+		{
+			name:           "Server is offline",
+			login:          "offlineuser",
+			password:       "pass",
+			isServerOnline: false,
+			serverMock:     nil,
+			expectedToken:  "",
+			expectedOutput: "Server is offline. Can't login",
+		},
+		{
+			name:           "Network error",
+			login:          "netuser",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock:     nil, // ошибка сети
+			expectedToken:  "",
+			expectedOutput: "Error:",
+		},
+		{
+			name:           "Server returns 500",
+			login:          "err500",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprintln(w, "Internal Server Error")
+			},
+			expectedToken:  "",
+			expectedOutput: "Error: Internal Server Error",
+		},
+		{
+			name:           "Invalid JSON response",
+			login:          "badjson",
+			password:       "pass",
+			isServerOnline: true,
+			serverMock: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintln(w, "This is not a JSON")
+			},
+			expectedToken:  "",
+			expectedOutput: "Error parsing response:",
+		},
+	}
 
-	loginUser("testuser", "testpass")
-	assert.Equal(t, "testtoken", token)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Stdout = oldStdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			token = ""
+
+			var serverURL string
+			if tt.serverMock != nil && tt.isServerOnline {
+				server := httptest.NewServer(http.HandlerFunc(tt.serverMock))
+				defer server.Close()
+				serverURL = server.URL
+			}
+
+			isServerOnline = tt.isServerOnline
+			client = resty.New().SetBaseURL(serverURL)
+
+			loginUser(tt.login, tt.password)
+
+			os.Stdout = oldStdout
+			_ = w.Close()
+			out, _ := io.ReadAll(r)
+
+			assert.Contains(t, string(out), tt.expectedOutput)
+			assert.Equal(t, tt.expectedToken, token)
+		})
+	}
 }
 
 func TestLoginUser_InvalidResponse(t *testing.T) {
@@ -621,23 +783,6 @@ func TestCreateServer(t *testing.T) {
 	srv := routing.CreateServer(cfg, chi.NewRouter(), logger)
 	assert.NotNil(t, srv)
 }
-
-// func TestRouting(t *testing.T) {
-// 	c := config.NewConfig()
-// 	_ = config.Init(c)
-// 	s, _ := storage.NewPostgresStorage(c.DBConnection)
-// 	userService := user.NewUserService(s)
-// 	ctrl := handlers.NewController(c, s, nil, userService)
-
-// 	r := chi.NewRouter()
-// 	routing.Routing(r, ctrl)
-
-// 	req := httptest.NewRequest("GET", "/ping", nil)
-// 	rec := httptest.NewRecorder()
-
-// 	r.ServeHTTP(rec, req)
-// 	assert.Equal(t, http.StatusOK, rec.Code)
-// }
 
 func TestClientMain(t *testing.T) {
 	oldArgs := os.Args

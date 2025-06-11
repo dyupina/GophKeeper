@@ -724,6 +724,7 @@ func TestAuthenticateMiddleware(t *testing.T) {
 		expectCode int
 	}{
 		{"No token", "", http.StatusUnauthorized},
+		{"Invalid token", "t", http.StatusUnauthorized},
 	}
 
 	for _, tt := range tests {
@@ -748,6 +749,11 @@ func TestNewController(t *testing.T) {
 }
 
 func TestHandleGracefulShutdown(t *testing.T) {
+	c := gomock.NewController(t)
+	defer c.Finish()
+
+	mockStorage := mocks.NewMockStorageService(c)
+
 	ctrl := &Controller{
 		logger: nil,
 		conf: &config.Config{
@@ -755,7 +761,7 @@ func TestHandleGracefulShutdown(t *testing.T) {
 			DBConnection: "mock-db-connection",
 			Timeout:      5,
 		},
-		storageService: &mocks.MockStorageService{},
+		storageService: mockStorage,
 	}
 
 	server := &http.Server{

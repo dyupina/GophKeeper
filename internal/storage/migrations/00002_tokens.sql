@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS tokens (
-    uid TEXT NOT NULL UNIQUE,
+    uid   TEXT NOT NULL UNIQUE,
     token TEXT PRIMARY KEY
 );
 -- +goose StatementEnd
