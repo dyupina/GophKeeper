@@ -1,0 +1,23 @@
+FROM golang:1.23-bookworm AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN GOOS=linux go build -o server ./cmd/server/main.go
+
+
+
+FROM debian:bookworm
+
+WORKDIR /app
+
+# Копируем скомпилированный бинарный файл из стадии сборки в финальный образ
+COPY --from=builder /app/server /app/
+
+RUN chmod +x /app/server
+
+CMD ["./server"]
